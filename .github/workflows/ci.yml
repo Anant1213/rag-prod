@@ -18,6 +18,11 @@ jobs:
       DATABASE_URL: postgresql://rag:rag@localhost:5432/rag
     steps:
       - uses: actions/checkout@v4
+      # provides a non-externally-managed interpreter; the runner's /usr python
+      # is PEP 668 marked, which makes `uv pip install --system` fail outright.
+      # 3.12 also matches the Dockerfile, so CI and the image agree.
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
       - uses: astral-sh/setup-uv@v3
       - run: uv pip install --system -r pyproject.toml --extra dev
       - run: ruff check .

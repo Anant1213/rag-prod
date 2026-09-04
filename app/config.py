@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     embed_dim: int = 384
     candidates_k: int = 20          # per retriever, before fusion
     final_k: int = 5                # chunks sent to the LLM
-    min_score: float = 0.02         # below this we refuse instead of hallucinating
+    # Below this we refuse instead of hallucinating. Keep it under the RRF
+    # single-list ceiling: with k=60 a rank-1 hit in one retriever scores
+    # 1/61 = 0.0164, so a threshold of 0.02 refused every dense-only match.
+    min_score: float = 0.01
 
     # ops
     service_name: str = "rag-chatbot"
