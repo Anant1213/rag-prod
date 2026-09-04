@@ -3,7 +3,14 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "rag-chatbot.fullname" . }}
-  labels: {{- include "rag-chatbot.labels" . | nindent 4 }}
+  labels:
+    {{- include "rag-chatbot.labels" . | nindent 4 }}
+    # Prometheus only picks up ServiceMonitors matching its serviceMonitorSelector.
+    # kube-prometheus-stack defaults that to `release: <helm release>`, so without
+    # a matching label here the ServiceMonitor is created but never scraped.
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   selector:
     matchLabels: {{- include "rag-chatbot.selectorLabels" . | nindent 6 }}

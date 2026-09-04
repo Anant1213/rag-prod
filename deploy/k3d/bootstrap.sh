@@ -4,11 +4,15 @@ set -euo pipefail
 
 CLUSTER=${CLUSTER:-rag}
 
-k3d cluster create "$CLUSTER" \
-  --agents 2 \
-  --port "8080:80@loadbalancer" \
-  --port "9091:30090@server:0" \
-  --k3s-arg "--disable=traefik@server:*"
+if k3d cluster list -o json | grep -q "\"name\":\"$CLUSTER\""; then
+  echo "cluster '$CLUSTER' already exists, reusing it"
+else
+  k3d cluster create "$CLUSTER" \
+    --agents 2 \
+    --port "8080:80@loadbalancer" \
+    --port "9091:30090@server:0" \
+    --k3s-arg "--disable=traefik@server:*"
+fi
 
 kubectl create namespace rag        --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace data       --dry-run=client -o yaml | kubectl apply -f -
@@ -16,12 +20,13 @@ kubectl create namespace observability --dry-run=client -o yaml | kubectl apply 
 kubectl create namespace argocd     --dry-run=client -o yaml | kubectl apply -f -
 
 # --- Postgres with pgvector ---
-helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null
-helm upgrade --install postgres bitnami/postgresql -n data \
-  --set image.repository=pgvector/pgvector \
-  --set image.tag=pg16 \
-  --set auth.username=rag --set auth.password=rag --set auth.database=rag \
-  --wait
+# Plain manifests rather than the Bitnami chart: see deploy/k3d/postgres.yaml.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+kubectl create configmap postgres-initdb -n data \
+  --from-file=init.sql="$HERE/../../scripts/init_db.sql" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f "$HERE/postgres.yaml"
+kubectl -n data rollout status sts/postgres --timeout=300s
 
 # --- Prometheus + Grafana + Alertmanager (brings the ServiceMonitor CRD) ---
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null

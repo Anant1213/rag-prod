@@ -1,0 +1,77 @@
+# Postgres + pgvector for the local cluster.
+#
+# This replaces the Bitnami postgresql chart. That chart now refuses substituted
+# images, and when forced it still mounts a read-only root filesystem and assumes
+# Bitnami's image layout, so the official pgvector image dies with:
+#   FATAL: could not create lock file "/var/run/postgresql/.s.PGSQL.5432.lock"
+# A plain StatefulSet is smaller, has no vendor coupling, and is named `postgres`
+# so the README's `kubectl -n data scale sts/postgres --replicas=0` works.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: data
+  labels: {app: postgres}
+spec:
+  ports: [{port: 5432, targetPort: 5432, name: postgres}]
+  selector: {app: postgres}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres
+  namespace: data
+type: Opaque
+stringData:
+  # local cluster only; real clusters get this from External Secrets / Vault
+  POSTGRES_USER: rag
+  POSTGRES_PASSWORD: rag
+  POSTGRES_DB: rag
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: data
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports: [{containerPort: 5432, name: postgres}]
+          envFrom:
+            - secretRef: {name: postgres}
+          env:
+            # keep the data dir one level down so the volume's lost+found does
+            # not make initdb refuse to run on a non-empty directory
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: initdb, mountPath: /docker-entrypoint-initdb.d}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "rag", "-d", "rag"]}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: {command: ["pg_isready", "-U", "rag", "-d", "rag"]}
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests: {cpu: "100m", memory: "256Mi"}
+            limits: {memory: "1Gi"}
+      volumes:
+        - name: initdb
+          configMap: {name: postgres-initdb}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: {requests: {storage: 2Gi}}

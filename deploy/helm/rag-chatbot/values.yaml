@@ -37,3 +37,8 @@ podDisruptionBudget:
 serviceMonitor:
   enabled: true                     # requires kube-prometheus-stack CRDs
   interval: 15s
+  # Must match the Prometheus serviceMonitorSelector, or the ServiceMonitor is
+  # created and silently ignored. kube-prometheus-stack selects on the release
+  # name it was installed under (`kps` in deploy/k3d/bootstrap.sh).
+  labels:
+    release: kps
