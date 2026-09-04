@@ -1,0 +1,8 @@
+{"question": "what do I do when connections are stuck idle in transaction?", "expected_source": "runbook-postgres-connection-exhaustion.md"}
+{"question": "how should I size the connection pool against max_connections?", "expected_source": "runbook-postgres-connection-exhaustion.md"}
+{"question": "why would the planner ignore my HNSW index?", "expected_source": "runbook-slow-vector-search.md"}
+{"question": "how do I reindex vectors without downtime?", "expected_source": "runbook-slow-vector-search.md"}
+{"question": "dense retrieval p95 is slow but lexical is fine", "expected_source": "runbook-slow-vector-search.md"}
+{"question": "the model provider is timing out, what should I check first?", "expected_source": "runbook-model-provider-outage.md"}
+{"question": "how do I handle a 429 rate limit storm from one tenant?", "expected_source": "runbook-model-provider-outage.md"}
+{"question": "should I hold a transaction open during an LLM call?", "expected_source": "runbook-postgres-connection-exhaustion.md"}

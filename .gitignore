@@ -1,0 +1,22 @@
+# local env / secrets
+.env
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# model weights cached by fastembed
+.cache/
+
+# os
+.DS_Store
+
+# machine-local agent/editor settings
+.claude/settings.local.json
