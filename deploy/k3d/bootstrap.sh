@@ -4,6 +4,19 @@ set -euo pipefail
 
 CLUSTER=${CLUSTER:-rag}
 
+# Preflight: containers must be able to resolve public DNS, or every image pull
+# fails with "dial tcp: lookup ghcr.io: Try again" and the cause is invisible
+# from inside Kubernetes. Docker Desktop's embedded resolver has been observed
+# failing this while the host resolves fine. Fix by adding public resolvers to
+# ~/.docker/daemon.json and restarting Docker Desktop:
+#   {"dns": ["8.8.8.8", "1.1.1.1"]}
+if ! docker run --rm alpine:3.20 nslookup ghcr.io >/dev/null 2>&1; then
+  echo "ERROR: containers cannot resolve ghcr.io." >&2
+  echo "Add {\"dns\": [\"8.8.8.8\", \"1.1.1.1\"]} to ~/.docker/daemon.json," >&2
+  echo "restart Docker Desktop, then re-run. See the comment above for detail." >&2
+  exit 1
+fi
+
 if k3d cluster list -o json | grep -q "\"name\":\"$CLUSTER\""; then
   echo "cluster '$CLUSTER' already exists, reusing it"
 else
