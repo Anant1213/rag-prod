@@ -1,10 +1,12 @@
 import json
+import pathlib
 import time
 from contextlib import asynccontextmanager
 
 import anyio
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app import db, embeddings
@@ -38,6 +40,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="rag-chatbot", version=settings.service_version, lifespan=lifespan)
 setup_tracing(app)
+
+# Single-page chat UI. Served from the app itself so there is nothing extra to run,
+# and it uses relative URLs so it works behind a port-forward, Ingress or subpath.
+STATIC_DIR = pathlib.Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 # ---- probes: liveness must NOT touch dependencies, readiness must ----

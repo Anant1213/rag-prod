@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rag-chatbot</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --panel:#fff; --ink:#16171a; --muted:#6b7280; --line:#e4e4e7;
+    --accent:#2563eb; --accent-ink:#fff; --chip:#eef2ff; --chip-ink:#3730a3;
+    --warn-bg:#fff7ed; --warn-line:#fdba74; --warn-ink:#9a3412;
+    --err-bg:#fef2f2; --err-line:#fca5a5; --err-ink:#991b1b;
+    --ok:#059669;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0f1013; --panel:#17181c; --ink:#e8e8ea; --muted:#9598a1; --line:#2a2c33;
+      --accent:#3b82f6; --chip:#1e253f; --chip-ink:#bfdbfe;
+      --warn-bg:#2a1c0e; --warn-line:#7c4a1a; --warn-ink:#fbbf24;
+      --err-bg:#2a1416; --err-line:#7f2a2f; --err-ink:#fca5a5;
+      --ok:#34d399;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:24px 20px 120px}
+  header{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px}
+  h1{font-size:19px; margin:0; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:13px}
+  .status{margin-left:auto; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted)}
+  .dot.ok{background:var(--ok)} .dot.bad{background:#dc2626}
+
+  .examples{display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 22px}
+  .examples button{
+    background:var(--panel); border:1px solid var(--line); color:var(--ink);
+    padding:7px 11px; border-radius:999px; font-size:12.5px; cursor:pointer; text-align:left;
+  }
+  .examples button:hover{border-color:var(--accent); color:var(--accent)}
+
+  .msg{margin:18px 0}
+  .who{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px}
+  .bubble{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+  .bubble.q{background:transparent; border-style:dashed}
+  .answer{white-space:pre-wrap; word-wrap:break-word; min-height:1.4em}
+  .answer code{background:var(--chip); color:var(--chip-ink); padding:1px 5px; border-radius:4px; font-size:13px}
+
+  .bubble.refusal{background:var(--warn-bg); border-color:var(--warn-line); color:var(--warn-ink)}
+  .bubble.error{background:var(--err-bg); border-color:var(--err-line); color:var(--err-ink)}
+
+  .sources{margin-top:12px; padding-top:11px; border-top:1px solid var(--line)}
+  .sources h4{margin:0 0 7px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600}
+  .chips{display:flex; flex-wrap:wrap; gap:6px}
+  .chip{background:var(--chip); color:var(--chip-ink); border-radius:6px; padding:4px 9px; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .chip .sc{opacity:.65; margin-left:5px}
+
+  .meta{margin-top:9px; font-size:11.5px; color:var(--muted); font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .cursor{display:inline-block; width:7px; height:15px; background:var(--accent); vertical-align:-2px; animation:b 1s steps(2) infinite}
+  @keyframes b{0%,50%{opacity:1}51%,100%{opacity:0}}
+
+  .composer{
+    position:fixed; left:0; right:0; bottom:0; background:var(--bg);
+    border-top:1px solid var(--line); padding:14px 20px;
+  }
+  .composer form{max-width:860px; margin:0 auto; display:flex; gap:9px}
+  .composer input{
+    flex:1; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel); color:var(--ink); font-size:15px; font-family:inherit;
+  }
+  .composer input:focus{outline:none; border-color:var(--accent)}
+  .composer button{
+    padding:12px 20px; border:0; border-radius:10px; background:var(--accent);
+    color:var(--accent-ink); font-size:15px; font-weight:500; cursor:pointer;
+  }
+  .composer button:disabled{opacity:.5; cursor:not-allowed}
+  .empty{color:var(--muted); font-size:13.5px; padding:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>rag-chatbot</h1>
+    <span class="sub">hybrid retrieval · pgvector HNSW + Postgres FTS · RRF</span>
+    <span class="status"><span class="dot" id="dot"></span><span id="statusText">checking…</span></span>
+  </header>
+
+  <div class="examples" id="examples"></div>
+  <div id="thread"><div class="empty">Ask something about the runbooks to see grounded retrieval and streaming in action.</div></div>
+</div>
+
+<div class="composer">
+  <form id="form">
+    <input id="q" autocomplete="off" placeholder="why would the planner ignore my HNSW index?">
+    <button id="send" type="submit">Ask</button>
+  </form>
+</div>
+
+<script>
+const EXAMPLES = [
+  "why would the planner ignore my HNSW index?",
+  "what do I do when connections are stuck idle in transaction?",
+  "how should I size the connection pool against max_connections?",
+  "what should I do when the model provider is down?",
+  "who won the world cup in 1998?",
+];
+
+const thread = document.getElementById("thread");
+const form = document.getElementById("form");
+const input = document.getElementById("q");
+const sendBtn = document.getElementById("send");
+
+const exWrap = document.getElementById("examples");
+EXAMPLES.forEach(t => {
+  const b = document.createElement("button");
+  b.textContent = t;
+  b.onclick = () => { input.value = t; form.requestSubmit(); };
+  exWrap.appendChild(b);
+});
+
+async function poll() {
+  const dot = document.getElementById("dot"), txt = document.getElementById("statusText");
+  try {
+    const r = await fetch("readyz");
+    const j = await r.json();
+    if (r.ok) { dot.className = "dot ok"; txt.textContent = "ready · v" + j.version; }
+    else { dot.className = "dot bad"; txt.textContent = "not ready"; }
+  } catch { dot.className = "dot bad"; txt.textContent = "unreachable"; }
+}
+poll(); setInterval(poll, 10000);
+
+// Minimal inline-code rendering; everything is inserted as text, never as HTML.
+function renderInto(el, text) {
+  el.textContent = "";
+  text.split(/(`[^`]+`)/g).forEach(part => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+      const c = document.createElement("code");
+      c.textContent = part.slice(1, -1);
+      el.appendChild(c);
+    } else if (part) {
+      el.appendChild(document.createTextNode(part));
+    }
+  });
+}
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+
+  if (thread.querySelector(".empty")) thread.innerHTML = "";
+  input.value = ""; sendBtn.disabled = true; input.disabled = true;
+
+  const qd = document.createElement("div");
+  qd.className = "msg";
+  qd.innerHTML = '<div class="who">You</div>';
+  const qb = document.createElement("div");
+  qb.className = "bubble q";
+  qb.textContent = question;
+  qd.appendChild(qb);
+  thread.appendChild(qd);
+
+  const ad = document.createElement("div");
+  ad.className = "msg";
+  ad.innerHTML = '<div class="who">rag-chatbot</div>';
+  const ab = document.createElement("div");
+  ab.className = "bubble";
+  const ans = document.createElement("div");
+  ans.className = "answer";
+  const cur = document.createElement("span");
+  cur.className = "cursor";
+  ans.appendChild(cur);
+  ab.appendChild(ans);
+  ad.appendChild(ab);
+  thread.appendChild(ad);
+  window.scrollTo(0, document.body.scrollHeight);
+
+  const t0 = performance.now();
+  let ttft = null, text = "", tokens = 0;
+
+  try {
+    const res = await fetch("chat", {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({question}),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", event = null;
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      const lines = buf.split("\n");
+      buf = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) { event = line.slice(7).trim(); continue; }
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+
+        if (payload === "[DONE]") { event = null; continue; }
+
+        if (event === "sources") {
+          const src = JSON.parse(payload);
+          const box = document.createElement("div");
+          box.className = "sources";
+          box.innerHTML = "<h4>Retrieved context</h4>";
+          const chips = document.createElement("div");
+          chips.className = "chips";
+          src.forEach(s => {
+            const c = document.createElement("span");
+            c.className = "chip";
+            c.textContent = "[" + s.n + "] " + s.source;
+            const sc = document.createElement("span");
+            sc.className = "sc";
+            sc.textContent = s.score.toFixed(4);
+            c.appendChild(sc);
+            chips.appendChild(c);
+          });
+          box.appendChild(chips);
+          ab.appendChild(box);
+          event = null;
+          continue;
+        }
+
+        if (event === "refusal") {
+          ab.className = "bubble refusal";
+          cur.remove();
+          ans.textContent = JSON.parse(payload).answer + "\n\nNo chunk cleared the grounding threshold, so the model was never called.";
+          event = null;
+          continue;
+        }
+
+        if (event === "error") {
+          ab.className = "bubble error";
+          cur.remove();
+          ans.textContent = "Upstream model error: " + JSON.parse(payload).error;
+          event = null;
+          continue;
+        }
+
+        const d = JSON.parse(payload);
+        if (d.delta !== undefined) {
+          if (ttft === null) ttft = performance.now() - t0;
+          tokens++;
+          text += d.delta;
+          renderInto(ans, text);
+          ans.appendChild(cur);
+          window.scrollTo(0, document.body.scrollHeight);
+        }
+      }
+    }
+  } catch (err) {
+    ab.className = "bubble error";
+    ans.textContent = "Request failed: " + err.message;
+  } finally {
+    cur.remove();
+    if (ttft !== null) {
+      const m = document.createElement("div");
+      m.className = "meta";
+      m.textContent = "TTFT " + (ttft / 1000).toFixed(2) + "s · total "
+        + ((performance.now() - t0) / 1000).toFixed(2) + "s · " + tokens + " tokens";
+      ab.appendChild(m);
+    }
+    sendBtn.disabled = false; input.disabled = false; input.focus();
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+};
+</script>
+</body>
+</html>
