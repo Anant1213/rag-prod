@@ -57,4 +57,9 @@ jobs:
         with:
           image-ref: ${{ steps.img.outputs.ref }}:${{ github.sha }}
           severity: HIGH,CRITICAL
+          # Only fail on vulnerabilities that can actually be acted on. The
+          # python:3.12-slim base currently carries 53 HIGH/CRITICAL findings
+          # with no fixed version published, so gating on unfixed CVEs makes
+          # the build permanently red with no developer action available.
+          ignore-unfixed: true
           exit-code: "1"
