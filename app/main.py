@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app import db, embeddings
+from app import db, embeddings, rerank
 from app.config import settings
 from app.llm import build_prompt, stream_completion
 from app.retrieval import retrieve
@@ -31,7 +31,10 @@ from app.telemetry import (
 async def lifespan(app: FastAPI):
     setup_logging()
     await db.open_pool()
-    await anyio.to_thread.run_sync(embeddings.warm)  # pay the model load before readiness
+    # pay both model loads before readiness, or the first real request eats them
+    await anyio.to_thread.run_sync(embeddings.warm)
+    if settings.rerank_enabled:
+        await anyio.to_thread.run_sync(rerank.warm)
     READY.set(1)
     yield
     READY.set(0)
@@ -100,7 +103,13 @@ async def chat(req: ChatRequest):
     async def event_stream():
         first = True
         sources = [
-            {"n": i, "source": c.source, "doc_id": c.doc_id, "score": round(c.score, 4)}
+            {
+                "n": i,
+                "source": c.source,
+                "doc_id": c.doc_id,
+                "page": c.page,
+                "score": round(c.score, 4),
+            }
             for i, c in enumerate(chunks, start=1)
         ]
         yield f"event: sources\ndata: {json.dumps(sources)}\n\n"

@@ -13,10 +13,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY app ./app
 COPY scripts ./scripts
 COPY eval ./eval
-# bake the embedding model into the image so pods don't download weights at startup
+# bake both models into the image so pods don't download weights at startup
 ENV HF_HOME=/app/.cache
 RUN mkdir -p /app/.cache && chown -R app /app
 USER app
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')" \
+ && python -c "from fastembed.rerank.cross_encoder import TextCrossEncoder; TextCrossEncoder(model_name='jinaai/jina-reranker-v1-turbo-en')"
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "30"]

@@ -7,6 +7,7 @@ class Chunk(BaseModel):
     source: str
     text: str
     score: float
+    page: int | None = None
 
 
 class ChatRequest(BaseModel):

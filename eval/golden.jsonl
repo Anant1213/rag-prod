@@ -6,3 +6,15 @@
 {"question": "the model provider is timing out, what should I check first?", "expected_source": "runbook-model-provider-outage.md"}
 {"question": "how do I handle a 429 rate limit storm from one tenant?", "expected_source": "runbook-model-provider-outage.md"}
 {"question": "should I hold a transaction open during an LLM call?", "expected_source": "runbook-postgres-connection-exhaustion.md"}
+{"question": "how does semantic chunking use cosine similarity to decide chunk boundaries?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "what is the difference between RAG and CAG?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "what is HyDE and how does it differ from traditional RAG?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "how does an agent decide which tool to call and with what parameters?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "why does an agentic system need memory between iterations?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "how does knowledge distillation train a student model from a teacher?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "what makes agentic RAG more robust than a single retrieval pass?", "expected_source": "AI_Engineering_System_design_patterns_for_applied_AI_1766763581.pdf"}
+{"question": "how should I fine-tune a model specifically for summarization?", "expected_source": "Mastering Large Language Models_ From Basics to Advanced Fine-Tuning.pdf"}
+{"question": "why did OpenAI launch fine-tuning for GPT-3.5?", "expected_source": "Mastering Large Language Models_ From Basics to Advanced Fine-Tuning.pdf"}
+{"question": "what dataset does Anthropic provide with human feedback for training a reward model?", "expected_source": "Mastering Large Language Models_ From Basics to Advanced Fine-Tuning.pdf"}
+{"question": "how does summarization compress earlier turns when a conversation exceeds the context window?", "expected_source": "Mastering Large Language Models_ From Basics to Advanced Fine-Tuning.pdf"}
+{"question": "how do multiple agents route tasks dynamically between each other?", "expected_source": "interview_guide.pdf"}

@@ -83,7 +83,7 @@
 <div class="wrap">
   <header>
     <h1>rag-chatbot</h1>
-    <span class="sub">hybrid retrieval · pgvector HNSW + Postgres FTS · RRF</span>
+    <span class="sub">hybrid retrieval · pgvector HNSW + Postgres FTS · RRF · cross-encoder rerank</span>
     <span class="status"><span class="dot" id="dot"></span><span id="statusText">checking…</span></span>
   </header>
 
@@ -100,10 +100,12 @@
 
 <script>
 const EXAMPLES = [
+  "what is the difference between RAG and CAG?",
+  "what is HyDE and how does it differ from traditional RAG?",
+  "how does semantic chunking use cosine similarity to decide chunk boundaries?",
+  "why does an agentic system need memory between iterations?",
+  "how should I fine-tune a model specifically for summarization?",
   "why would the planner ignore my HNSW index?",
-  "what do I do when connections are stuck idle in transaction?",
-  "how should I size the connection pool against max_connections?",
-  "what should I do when the model provider is down?",
   "who won the world cup in 1998?",
 ];
 
@@ -216,7 +218,9 @@ form.onsubmit = async (e) => {
           src.forEach(s => {
             const c = document.createElement("span");
             c.className = "chip";
-            c.textContent = "[" + s.n + "] " + s.source;
+            const label = s.source.length > 34 ? s.source.slice(0, 32) + "…" : s.source;
+            c.textContent = "[" + s.n + "] " + label + (s.page ? " p." + s.page : "");
+            c.title = s.source + (s.page ? " — page " + s.page : "");
             const sc = document.createElement("span");
             sc.className = "sc";
             sc.textContent = s.score.toFixed(4);
