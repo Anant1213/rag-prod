@@ -24,6 +24,22 @@ resources:
   requests: {cpu: "500m", memory: "1Gi"}
   limits: {memory: "2Gi"}          # no CPU limit: throttling an inference gateway is self-harm
 
+# Corpus ingest, run as an Argo CD PostSync hook. Documents come from git, not
+# from the application image, so the image stays small and the corpus stays
+# reproducible after a lost volume.
+ingest:
+  enabled: true
+  repo: https://github.com/Anant1213/rag-prod.git
+  revision: main
+  path: docs
+  gitImage: alpine/git:2.45.2
+  psqlImage: pgvector/pgvector:pg16
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+
 autoscaling:
   enabled: true
   minReplicas: 2

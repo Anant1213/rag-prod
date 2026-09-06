@@ -1,0 +1,83 @@
+{{- if .Values.ingest.enabled }}
+# Corpus ingest, as an Argo CD PostSync hook.
+#
+# Without this the corpus only exists because someone once ran the script by
+# hand against a port-forward: lose the Postgres volume and it does not come
+# back. Running it after every successful sync makes the documents in git the
+# source of truth for what is in the database, the same way the chart is the
+# source of truth for what is in the cluster.
+#
+# The documents are cloned rather than baked into the application image --
+# every pod pulls that image on every rollout, and it has no reason to carry
+# tens of megabytes of PDFs it never reads.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rag-chatbot.fullname" . }}-ingest
+  labels: {{- include "rag-chatbot.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    # Jobs are immutable, so the previous one must go before this one is made.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: {{ .Values.ingest.backoffLimit }}
+  # Reclaim finished Jobs, but leave a window to read the logs.
+  ttlSecondsAfterFinished: {{ .Values.ingest.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels: {{- include "rag-chatbot.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      volumes:
+        - name: corpus
+          emptyDir: {}
+      initContainers:
+        # 1. Fetch the documents. --depth 1 keeps a shallow copy; the PDFs make
+        #    full history an expensive thing to pull on every sync.
+        - name: fetch-corpus
+          image: {{ .Values.ingest.gitImage }}
+          command: ["git", "clone", "--depth", "1", "--branch", "{{ .Values.ingest.revision }}",
+                    "{{ .Values.ingest.repo }}", "/corpus"]
+          volumeMounts: [{name: corpus, mountPath: /corpus}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          resources: {{- toYaml .Values.ingest.resources | nindent 12 }}
+
+        # 2. Apply the schema. Idempotent, and it carries the additive migrations,
+        #    so a database restored from an empty volume is usable before ingest
+        #    tries to write to it.
+        - name: apply-schema
+          image: {{ .Values.ingest.psqlImage }}
+          command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/corpus/scripts/init_db.sql"]
+          env:
+            - name: PGURI
+              valueFrom:
+                secretKeyRef: {name: {{ include "rag-chatbot.fullname" . }}, key: DATABASE_URL}
+          args: ["$(PGURI)"]
+          volumeMounts: [{name: corpus, mountPath: /corpus}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          resources: {{- toYaml .Values.ingest.resources | nindent 12 }}
+
+      containers:
+        # 3. Ingest. The same image the API runs, so the embedding model that
+        #    writes the vectors is byte-identical to the one that later queries
+        #    them -- a mismatch there silently destroys retrieval quality.
+        - name: ingest
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "scripts.ingest", "/corpus/{{ .Values.ingest.path }}"]
+          envFrom:
+            - configMapRef: {name: {{ include "rag-chatbot.fullname" . }}}
+            - secretRef: {name: {{ include "rag-chatbot.fullname" . }}}
+          volumeMounts: [{name: corpus, mountPath: /corpus}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            # matches the API container: fastembed writes to its ONNX cache
+            readOnlyRootFilesystem: false
+            capabilities: {drop: ["ALL"]}
+          resources: {{- toYaml .Values.ingest.resources | nindent 12 }}
+{{- end }}

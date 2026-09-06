@@ -26,6 +26,13 @@ CHUNK_CHARS = 1100      # ~275 tokens, comfortably inside bge's 512-token window
 OVERLAP = 200
 MIN_CHUNK_CHARS = 120   # below this a fragment carries no retrievable signal
 
+# Embed in batches. Handing fastembed a whole document at once let ONNX allocate
+# for every chunk simultaneously: a 150-chunk PDF peaked at 3.6GB and was
+# OOMKilled under a 2Gi container limit, while the same run on a laptop with no
+# limit passed. Batching makes peak memory a function of this constant rather
+# than of the largest document.
+EMBED_BATCH = 32
+
 # A line repeated across this fraction of a PDF's pages is furniture -- a running
 # header, footer or watermark. Left in, it lands in every embedding from that
 # document and pulls unrelated chunks toward each other.
@@ -171,17 +178,19 @@ def main(root: str, tenant: str = "default") -> None:
 
             # replace-in-place: delete then insert, so removed content leaves no orphan vectors
             conn.execute("delete from chunks where tenant=%s and doc_id=%s", (tenant, doc_id))
-            vectors = embed_sync([text for text, _ in pieces])
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """insert into chunks
-                       (tenant, doc_id, source, version, chunk_index, text, page, embedding)
-                       values (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    [
-                        (tenant, doc_id, path.name, version, i, text, page, vec)
-                        for i, ((text, page), vec) in enumerate(zip(pieces, vectors))
-                    ],
-                )
+            for start in range(0, len(pieces), EMBED_BATCH):
+                batch = pieces[start : start + EMBED_BATCH]
+                vectors = embed_sync([text for text, _ in batch])
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """insert into chunks
+                           (tenant, doc_id, source, version, chunk_index, text, page, embedding)
+                           values (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        [
+                            (tenant, doc_id, path.name, version, start + i, text, page, vec)
+                            for i, ((text, page), vec) in enumerate(zip(batch, vectors))
+                        ],
+                    )
             span = f" pages 1-{max(p for _, p in pieces if p)}" if pieces[0][1] else ""
             print(f"ingest {doc_id} -> {len(pieces)} chunks{span} @ {version}")
 
