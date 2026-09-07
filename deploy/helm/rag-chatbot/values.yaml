@@ -24,6 +24,21 @@ resources:
   requests: {cpu: "500m", memory: "1Gi"}
   limits: {memory: "2Gi"}          # no CPU limit: throttling an inference gateway is self-harm
 
+# Grafana dashboard, delivered as a ConfigMap the Grafana sidecar picks up.
+dashboard:
+  enabled: true
+  sidecarLabel: grafana_dashboard
+  folder: /tmp/dashboards
+
+# Alert rules. `labels` must match the operator's ruleSelector or the rules are
+# adopted by nothing and fail silently -- the same trap the ServiceMonitor hit.
+prometheusRule:
+  enabled: true
+  labels:
+    release: kps
+  ttftP95Seconds: 4
+  errorRatio: 0.05
+
 # Corpus ingest, run as an Argo CD PostSync hook. Documents come from git, not
 # from the application image, so the image stays small and the corpus stays
 # reproducible after a lost volume.
@@ -43,7 +58,13 @@ ingest:
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 10
+  # Ceiling set by the host, not by ambition. Every k3d node container reports
+  # the whole Docker VM's memory as allocatable, so a 3-node cluster on a 7.75Gi
+  # VM advertises ~23Gi and the scheduler will cheerfully place 10 pods that
+  # request 1Gi each. It did: load drove the HPA to 10, the VM ran out of memory
+  # for real, and the control-plane node went NotReady. The scheduler cannot see
+  # this -- the number has to come from what the machine actually has.
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
 
 podDisruptionBudget:
