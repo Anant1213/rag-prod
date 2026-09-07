@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/anant1213/rag-prod
-  tag: "4801577b183636b0ada0e0bb9b4c0f36768a6ef9"
+  tag: "8fa6317dc12e1128708e6edc14a973263d604568"
   pullPolicy: IfNotPresent
 
 service:
