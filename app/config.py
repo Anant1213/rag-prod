@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # OOMKill. Keep it near the pod's CPU allocation -- more threads than cores
     # buys queueing inside the process instead of throughput.
     model_concurrency: int = 2
+
+    # ONNX intra-op threads per inference. Left unset, ONNX Runtime sizes its
+    # thread pool to the host's core count, which is wrong in a container: the
+    # pod sees the node's 11 cores, so at 4 replicas x 2 concurrent passes the
+    # cluster asked 88 threads to share 11 cores and collapsed -- 0.5 req/s
+    # served cleanly, 1 req/s timed out entirely. Measured per rerank of 20
+    # candidates: 1 thread 1649ms, 2 threads 933ms, 11 threads 459ms. Two is the
+    # knee: most of the speedup, and 4 threads per pod instead of 22.
+    onnx_threads: int = 2
     # Below this we refuse instead of hallucinating. Now that reranking replaces
     # the RRF score with a 0-1 relevance probability, this is a real threshold
     # rather than a guess against RRF's 1/(k+rank) ceiling.

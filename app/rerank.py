@@ -19,7 +19,7 @@ def _model():
     # ONNX, CPU-only, ~80MB. Same runtime as the embedding model, no torch.
     from fastembed.rerank.cross_encoder import TextCrossEncoder
 
-    return TextCrossEncoder(model_name=settings.rerank_model)
+    return TextCrossEncoder(model_name=settings.rerank_model, threads=settings.onnx_threads)
 
 
 def warm() -> None:

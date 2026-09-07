@@ -10,7 +10,7 @@ def _model():
     # fastembed = ONNX, CPU-only, ~90MB. No torch in the image.
     from fastembed import TextEmbedding
 
-    return TextEmbedding(model_name=settings.embed_model)
+    return TextEmbedding(model_name=settings.embed_model, threads=settings.onnx_threads)
 
 
 def warm() -> None:
