@@ -149,14 +149,20 @@ def chunk_segments(segments: list[Segment]) -> list[Segment]:
 # ---------------------------------------------------------------- ingest
 
 def main(root: str, tenant: str = "default") -> None:
-    paths = sorted(p for p in pathlib.Path(root).rglob("*") if p.suffix.lower() in LOADERS)
+    root_path = pathlib.Path(root)
+    paths = sorted(p for p in root_path.rglob("*") if p.suffix.lower() in LOADERS)
     if not paths:
         sys.exit(f"no .md or .pdf files under {root}")
 
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         register_vector(conn)
         for path in paths:
-            doc_id = str(path)
+            # Relative to the ingest root, never the invocation path. Absolute
+            # paths made doc_id depend on where the corpus happened to be
+            # mounted: a laptop run wrote "docs/x.pdf" and the same corpus from
+            # a Job at /corpus wrote "/corpus/docs/x.pdf", so the replace-in-place
+            # delete matched nothing and every document was silently duplicated.
+            doc_id = str(path.relative_to(root_path))
             # hash the bytes (not decoded text, so PDFs work) together with the
             # pipeline id, so either a new source or a new chunker forces a rebuild
             digest = hashlib.sha256(path.read_bytes())
