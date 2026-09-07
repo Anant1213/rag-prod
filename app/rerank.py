@@ -34,5 +34,21 @@ def rerank_sync(question: str, texts: list[str]) -> list[float]:
     return [1.0 / (1.0 + math.exp(-s)) for s in _model().rerank(question, texts)]
 
 
+@lru_cache(maxsize=1)
+def _limiter() -> anyio.CapacityLimiter:
+    """Bound how many model passes run at once.
+
+    anyio's default thread pool is 40, so without a limiter a burst of traffic
+    becomes 40 simultaneous ONNX sessions, each allocating for its own batch. At
+    10 req/s this OOMKilled every pod inside 20 seconds -- 0 of 208 requests
+    succeeded, because the pods died rather than queued. Capping concurrency
+    turns overload into latency, which sheds load through timeouts instead of
+    taking the process down.
+    """
+    return anyio.CapacityLimiter(settings.model_concurrency)
+
+
 async def rerank(question: str, texts: list[str]) -> list[float]:
-    return await anyio.to_thread.run_sync(lambda: rerank_sync(question, texts))
+    return await anyio.to_thread.run_sync(
+        lambda: rerank_sync(question, texts), limiter=_limiter()
+    )

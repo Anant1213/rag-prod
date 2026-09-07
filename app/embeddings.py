@@ -22,9 +22,17 @@ def embed_sync(texts: list[str], prefix: str = "") -> list[list[float]]:
     return [v.tolist() for v in _model().embed(inputs)]
 
 
+@lru_cache(maxsize=1)
+def _limiter() -> anyio.CapacityLimiter:
+    # Same bound as reranking, and for the same reason: anyio's default 40-thread
+    # pool lets a traffic burst run 40 concurrent ONNX sessions and OOM the pod.
+    return anyio.CapacityLimiter(settings.model_concurrency)
+
+
 async def embed_query(text: str) -> list[float]:
     # bge models want this prefix on queries only
     vectors = await anyio.to_thread.run_sync(
-        lambda: embed_sync([text], prefix="Represent this sentence for searching relevant passages: ")
+        lambda: embed_sync([text], prefix="Represent this sentence for searching relevant passages: "),
+        limiter=_limiter(),
     )
     return vectors[0]

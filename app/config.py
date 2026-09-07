@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # jina puts it at rank 1. ~150MB vs ~80MB, same ONNX runtime.
     rerank_model: str = "jinaai/jina-reranker-v1-turbo-en"
     rerank_candidates: int = 20
+
+    # Concurrent ONNX passes per pod, across embedding and reranking. Guards the
+    # memory limit: model inference is the only unbounded allocation in the
+    # request path, so this is what stands between a traffic burst and an
+    # OOMKill. Keep it near the pod's CPU allocation -- more threads than cores
+    # buys queueing inside the process instead of throughput.
+    model_concurrency: int = 2
     # Below this we refuse instead of hallucinating. Now that reranking replaces
     # the RRF score with a 0-1 relevance probability, this is a real threshold
     # rather than a guess against RRF's 1/(k+rank) ceiling.
